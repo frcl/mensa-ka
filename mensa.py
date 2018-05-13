@@ -32,6 +32,10 @@ Linie 3 am Adenauerring:
 
     \033[95m$ curl {host}/A/3\033[0m
 
+JSON output:
+
+    \033[95m$ curl {host}?format=json\033[0m
+
 """.format(host='mensa-ka.herokuapp.com')
 HELP_HTML = """<pre>
     <h1># {host}</h1>
@@ -49,6 +53,10 @@ HELP_HTML = """<pre>
     Linie 3 am Adenauerring:
     <code>
     $ curl {host}/A/3
+    </code>
+    JSON output:
+    <code>
+    $ curl {host}?format=json
     </code>
 </pre>""".format(host='mensa-ka.herokuapp.com')
 SHORTNAMES = {
@@ -172,19 +180,6 @@ def get_line(mquery, lquery):
         raise ValueError('Ambiguous short name')
 
 
-async def handle_mensa_request(request):
-    await LOCK.acquire()
-
-    try:
-        data = get_mensa(request.match_info['mensa'])
-        resp = web.Response(text=format_mensa(data))
-    except ValueError as exc:
-        resp = web.Response(text=exc.args[0])
-
-    LOCK.release()
-    return resp
-
-
 def format_mensa(data):
     names, food = zip(*data.items())
     return '\n\n'.join(map('{}:\n{}'.format, names, map(format_line, food)))
@@ -203,23 +198,49 @@ def format_meal(data):
     ]
 
 
-async def handle_line_request(request):
+async def req2resp(request, data_getter, args, formatter):
     await LOCK.acquire()
 
     try:
-        data = get_line(request.match_info['mensa'],
-                        request.match_info['linie'])
-        resp = web.Response(text=format_line(data))
+        data = data_getter(*args)
     except ValueError as exc:
-        resp = web.Response(text=exc.args[0])
+        return web.Response(text=exc.args[0],
+                            content_type='text/plain')
 
     LOCK.release()
+    return data2resp(data, request, formatter)
+
+
+def data2resp(data, request, formatter):
+    if 'format' in request.query and 'json' in request.query['format']:
+        resp = web.json_response(data)
+    else:
+        resp = web.Response(text=formatter(data),
+                            content_type='text/plain')
+    return resp
+
+
+async def handle_mensa_request(request):
+    resp = await req2resp(
+        request, get_mensa,
+        [request.match_info['mensa']],
+        format_mensa
+    )
+    return resp
+
+
+async def handle_line_request(request):
+    resp = await req2resp(
+        request, get_line,
+        [request.match_info['mensa'], request.match_info['linie']],
+        format_line
+    )
     return resp
 
 
 async def handle_default_request(request):
     await LOCK.acquire()
-    resp = web.Response(text=format_mensa(DATA['Mensa Am Adenauerring']))
+    resp = data2resp(DATA['Mensa Am Adenauerring'], request, format_mensa)
     LOCK.release()
     return resp
 
