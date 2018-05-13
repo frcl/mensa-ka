@@ -1,4 +1,5 @@
 # pylint: disable=import-error
+import argparse
 import re
 import datetime
 import asyncio
@@ -216,6 +217,9 @@ async def usage(request):
 
 
 if __name__ == '__main__':
+    argp = argparse.ArgumentParser()
+    argp.add_argument('-p', '--port', default=80)
+    args = argp.parse_args()
     app = web.Application()
     app.on_startup.append(start_background_tasks)
     app.add_routes([web.get('/help', usage),
@@ -223,4 +227,4 @@ if __name__ == '__main__':
                     web.get('/', handle_default_request),
                     web.get('/{mensa}', handle_mensa_request),
                     web.get('/{mensa}/{linie}', handle_line_request)])
-    web.run_app(app, port=80)
+    web.run_app(app, port=args.port)
