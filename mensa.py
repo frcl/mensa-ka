@@ -223,4 +223,4 @@ if __name__ == '__main__':
                     web.get('/', handle_default_request),
                     web.get('/{mensa}', handle_mensa_request),
                     web.get('/{mensa}/{linie}', handle_line_request)])
-    web.run_app(app)
+    web.run_app(app, port=80)
