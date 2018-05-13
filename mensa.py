@@ -15,24 +15,24 @@ MENSA_HTML_URL = 'http://www.sw-ka.de/de/essen/'
 DATA = {}
 LOCK = asyncio.Lock()
 META_DATA = {'last_update': None}
-HELP_TEXT = """# men.sa
+HELP_TEXT = """\033[93m# men.sa\033[0m
 Commad line web application for mensa food
 
-# Usage
+\033[93m# Usage\033[0m
 Mensa am Adenauerring (default):
 
-    $ curl {host}
+    \033[95m$ curl {host}\033[0m
 
 Mensa Schloss Gottesaue:
 
-    $ curl {host}/Gottesaue
-    $ curl {host}/G
+    \033[95m$ curl {host}/Gottesaue\033[0m
+    \033[95m$ curl {host}/G\033[0m
 
 Linie 3 am Adenauerring:
 
-    $ curl {host}/A/3
+    \033[95m$ curl {host}/A/3\033[0m
 
-""".format(host='men.sa')
+""".format(host='mensa-ka.herokuapp.com')
 HELP_HTML = """<pre>
     <h1># {host}</h1>
     Commad line web application for mensa food
@@ -50,7 +50,7 @@ HELP_HTML = """<pre>
     <code>
     $ curl {host}/A/3
     </code>
-</pre>""".format(host='men.sa')
+</pre>""".format(host='mensa-ka.herokuapp.com')
 SHORTNAMES = {
     # 'CafeteMoltke': 'Caféteria Moltkestraße 30',
     'Adenauerring': 'Mensa Am Adenauerring',
@@ -59,6 +59,14 @@ SHORTNAMES = {
     'Moltkestraße': 'Mensa Moltke',
     'Gottesaue': 'Mensa Schloss Gottesaue',
     'Tiefenbronnerstraße': 'Mensa Tiefenbronnerstraße'
+}
+ICON_TAGS = {
+    'vegetarian_2.gif': 'veggi',
+    'vegan_2.gif': 'vegan',
+    's_2.gif': 'schwein',
+    'r_2.gif': 'rind',
+    'm_2.gif': 'fisch',
+    'bio_2.gif': 'bio',
 }
 
 
@@ -96,10 +104,10 @@ def parse_sw_site(html):
         {'mensa 1': {
             'line 1': [
                 {
-                    'name'; 'meal 1',
+                    'name': 'meal 1',
                     'note': 'with extra stuff',
                     'price': '2.60 €',
-                    # (soon:) 'tags': ['vegan', 'gluten', ...],
+                    'tags': ['vegan', 'bio', ...],
                 }
                 ...],
             ...},
@@ -115,16 +123,19 @@ def parse_sw_site(html):
     for div in menu_divs:
         line_trs = div.findAll('tr', {'class': None})
         lines = {}
-        for tr in line_trs:
-            name = tr.find('td', {'class': 'mensatype'}).contents[0].text
+        for ltr in line_trs:
+            name = ltr.find('td', {'class': 'mensatype'}).contents[0].text
             meals = []
-            for td in tr.findAll('td', {'class': 'first'}):
+            for mtr in ltr.findAll('tr', {'class': re.compile(r'mt-\d')}):
+                td = mtr.find('td', {'class': 'first'})
                 note = td.find('span', {'class': None})
+                tagnames = [ICON_TAGS.get(img['src'].split('/')[-1]) for img in
+                            mtr.findAll('img', {'class': 'mealicon_2'})]
                 meals.append({
-                    'name': td.find('b').text,
+                    'name': mtr.find('b').text,
                     'note': note.text if note else '',
-                    'price': tr.find('span', {'class': 'bgp price_1'}).text,
-                    # 'tags': TODO
+                    'price': mtr.find('span', {'class': 'bgp price_1'}).text,
+                    'tags': [tag for tag in tagnames if tag]
                 })
             lines[name] = meals
         mensen[canteens[div.attrs['id'][-3]]] = lines
@@ -180,7 +191,16 @@ def format_mensa(data):
 
 
 def format_line(data):
-    return tabulate([meal.values() for meal in data], tablefmt='fancy_grid')
+    return tabulate([format_meal(meal) for meal in data],
+                    tablefmt='fancy_grid') + '\n'
+
+
+def format_meal(data):
+    return [
+        data['name']+(' ({})'.format(data['note']) if data['note'] else ''),
+        ','.join(data['tags']),
+        data['price']
+    ]
 
 
 async def handle_line_request(request):
