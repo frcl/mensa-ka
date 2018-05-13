@@ -13,7 +13,7 @@ import bs4
 MENSA_HTML_URL = 'http://www.sw-ka.de/de/essen/'
 DATA = {}
 LOCK = asyncio.Lock()
-META_DATA = {'last_update': datetime.datetime(2000, 1, 1, 0).isoformat()}
+META_DATA = {'last_update': None}
 HELP_TEXT = """# men.sa
 Commad line web application for mensa food
 
