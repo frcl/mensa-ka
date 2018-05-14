@@ -132,27 +132,28 @@ def parse_sw_site(html):
         line_trs = div.findAll('tr', {'class': None})
         lines = {}
         for ltr in line_trs:
-            name = ltr.find('td', {'class': 'mensatype'}).contents[0].text
-            meals = []
-            for mtr in ltr.findAll('tr', {'class': re.compile(r'mt-\d')}):
-                td = mtr.find('td', {'class': 'first'})
-                note = td.find('span', {'class': None})
-                tagnames = [ICON_TAGS.get(img['src'].split('/')[-1]) for img in
-                            mtr.findAll('img', {'class': 'mealicon_2'})]
-                meals.append({
-                    'name': mtr.find('b').text,
-                    'note': note.text if note else '',
-                    'price': mtr.find('span', {'class': 'bgp price_1'}).text,
-                    'tags': [tag for tag in tagnames if tag]
-                })
-            lines[name] = meals
+            nametd = ltr.find('td', {'class': 'mensatype'})
+            if nametd:
+                name = nametd.contents[0].text
+                meals = []
+                for mtr in ltr.findAll('tr', {'class': re.compile(r'mt-\d')}):
+                    td = mtr.find('td', {'class': 'first'})
+                    note = td.find('span', {'class': None})
+                    tagnames = [ICON_TAGS.get(img['src'].split('/')[-1]) for img in
+                                mtr.findAll('img', {'class': 'mealicon_2'})]
+                    meals.append({
+                        'name': mtr.find('b').text,
+                        'note': note.text if note else '',
+                        'price': mtr.find('span', {'class': 'bgp price_1'}).text,
+                        'tags': [tag for tag in tagnames if tag]
+                    })
+                lines[name] = meals
         mensen[canteens[div.attrs['id'][-3]]] = lines
     return mensen
 
 
 async def handle_meta_request(request):
-    resp = web.json_response(META_DATA)
-    return resp
+    return web.json_response(META_DATA)
 
 
 def get_mensa(query):
@@ -191,11 +192,8 @@ def format_line(data):
 
 
 def format_meal(data):
-    return [
-        data['name']+(' ({})'.format(data['note']) if data['note'] else ''),
-        ','.join(data['tags']),
-        data['price']
-    ]
+    desc = data['name']+(' ({})'.format(data['note']) if data['note'] else '')
+    return [desc, ','.join(data['tags']), data['price']]
 
 
 async def req2resp(request, data_getter, args, formatter):
@@ -204,8 +202,7 @@ async def req2resp(request, data_getter, args, formatter):
     try:
         data = data_getter(*args)
     except ValueError as exc:
-        return web.Response(text=exc.args[0],
-                            content_type='text/plain')
+        return web.Response(text=exc.args[0], content_type='text/plain')
 
     LOCK.release()
     return data2resp(data, request, formatter)
@@ -215,27 +212,18 @@ def data2resp(data, request, formatter):
     if 'format' in request.query and 'json' in request.query['format']:
         resp = web.json_response(data)
     else:
-        resp = web.Response(text=formatter(data),
-                            content_type='text/plain')
+        resp = web.Response(text=formatter(data), content_type='text/plain')
     return resp
 
 
 async def handle_mensa_request(request):
-    resp = await req2resp(
-        request, get_mensa,
-        [request.match_info['mensa']],
-        format_mensa
-    )
-    return resp
+    args = [request.match_info['mensa']]
+    return await req2resp(request, get_mensa, args, format_mensa)
 
 
 async def handle_line_request(request):
-    resp = await req2resp(
-        request, get_line,
-        [request.match_info['mensa'], request.match_info['linie']],
-        format_line
-    )
-    return resp
+    args = [request.match_info['mensa'], request.match_info['linie']]
+    return await req2resp(request, get_line, args, format_line)
 
 
 async def handle_default_request(request):
