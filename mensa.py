@@ -15,6 +15,7 @@ MENSA_HTML_URL = 'http://www.sw-ka.de/de/essen/'
 DATA = {}
 LOCK = asyncio.Lock()
 META_DATA = {'last_update': None}
+HOST = 'mensa-ka.herokuapp.com'
 HELP_TEXT = """\033[93m# men.sa\033[0m
 Commad line web application for mensa food
 
@@ -36,7 +37,7 @@ JSON output:
 
     \033[95m$ curl {host}?format=json\033[0m
 
-""".format(host='mensa-ka.herokuapp.com')
+""".format(host=HOST)
 HELP_HTML = """<pre>
     <h1># {host}</h1>
     Commad line web application for mensa food
@@ -58,7 +59,12 @@ HELP_HTML = """<pre>
     <code>
     $ curl {host}?format=json
     </code>
-</pre>""".format(host='mensa-ka.herokuapp.com')
+</pre>""".format(host=HOST)
+RESP_TEMPL = """{header}
+{content}
+For usage info see \033[93mhttp://{domain}/help\033[0m
+Found a bug? Open an issue at \033[93mhttps://github.com/frcl/mensa-ka\033[0m
+"""
 SHORTNAMES = {
     # 'CafeteMoltke': 'Caféteria Moltkestraße 30',
     'Adenauerring': 'Mensa Am Adenauerring',
@@ -196,23 +202,34 @@ def format_meal(data):
     return [desc, ','.join(data['tags']), data['price']]
 
 
+def get_resp_text(content, header=None):
+    return RESP_TEMPL.format(content=content,
+                             header=header if header else '',
+                             domain=HOST)
+
 async def req2resp(request, data_getter, args, formatter):
     await LOCK.acquire()
 
     try:
         data = data_getter(*args)
     except ValueError as exc:
-        return web.Response(text=exc.args[0], content_type='text/plain')
+        resp = web.Response(text=get_resp_text('\033[31mERROR: {}\033[0m\n---'
+                                               .format(exc.args[0])),
+                            content_type='text/plain')
+    else:
+        resp = data2resp(data, request, formatter)
+    finally:
+        LOCK.release()
 
-    LOCK.release()
-    return data2resp(data, request, formatter)
+    return resp
 
 
 def data2resp(data, request, formatter):
     if 'format' in request.query and 'json' in request.query['format']:
         resp = web.json_response(data)
     else:
-        resp = web.Response(text=formatter(data), content_type='text/plain')
+        resp = web.Response(text=get_resp_text(formatter(data)),
+                            content_type='text/plain')
     return resp
 
 
