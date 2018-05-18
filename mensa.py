@@ -189,7 +189,7 @@ def get_line(mquery, lquery):
 
 def format_mensa(data):
     names, food = zip(*data.items())
-    return '\n\n'.join(map('{}:\n{}'.format, names, map(format_line, food)))
+    return '\n'.join(map('{}:\n{}'.format, names, map(format_line, food)))
 
 
 def format_line(data):
