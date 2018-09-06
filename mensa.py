@@ -3,23 +3,38 @@ import argparse
 import re
 import datetime
 import asyncio
-
-import aiohttp
-from aiohttp import web
-from dateutil import rrule
-from tabulate import tabulate
 import bs4
 
+from dateutil import rrule
+from tabulate import tabulate
+from aiohttp import web, ClientSession
 
+
+# Configuration
+ROOT = 'frcl.de/mensa'
 MENSA_HTML_URL = 'http://www.sw-ka.de/de/essen/'
-DATA = {}
-LOCK = asyncio.Lock()
-META_DATA = {'last_update': None}
-HOST = 'mensa-ka.herokuapp.com'
-HELP_TEXT = """\033[93m# men.sa\033[0m
+SHORTNAMES = {
+    # 'CafeteMoltke': 'Caféteria Moltkestraße 30',
+    'Adenauerring': 'Mensa Am Adenauerring',
+    'Erzbergerstraße': 'Mensa Erzbergerstraße',
+    'Holzgartenstraße': 'Mensa Holzgartenstraße',
+    'Moltkestraße': 'Mensa Moltke',
+    'Gottesaue': 'Mensa Schloss Gottesaue',
+    'Tiefenbronnerstraße': 'Mensa Tiefenbronnerstraße'
+}
+ICON_TAGS = {
+    'vegetarian_2.gif': 'veggi',
+    'vegan_2.gif': 'vegan',
+    's_2.gif': 'schwein',
+    'r_2.gif': 'rind',
+    'm_2.gif': 'fisch',
+    'bio_2.gif': 'bio',
+}
+# Templates
+HELP_TEXT = """\033[1m\033[33m# men.sa\033[0m
 Commad line web application for mensa food
 
-\033[93m# Usage\033[0m
+\033[1m\033[33m# Usage\033[0m
 Mensa am Adenauerring (default):
 
     \033[95m$ curl {host}\033[0m
@@ -37,7 +52,7 @@ JSON output:
 
     \033[95m$ curl {host}?format=json\033[0m
 
-""".format(host=HOST)
+""".format(host=ROOT)
 HELP_HTML = """<pre>
     <h1># {host}</h1>
     Commad line web application for mensa food
@@ -59,33 +74,21 @@ HELP_HTML = """<pre>
     <code>
     $ curl {host}?format=json
     </code>
-</pre>""".format(host=HOST)
+</pre>""".format(host=ROOT)
 RESP_TEMPL = """{header}
 {content}
-For usage info see \033[93mhttp://{domain}/help\033[0m
-Found a bug? Open an issue at \033[93mhttps://github.com/frcl/mensa-ka\033[0m
+For usage info see \033[33mhttp://{domain}/help\033[0m
+Found a bug? Open an issue at \033[33mhttps://github.com/frcl/mensa-ka\033[0m
 """
-SHORTNAMES = {
-    # 'CafeteMoltke': 'Caféteria Moltkestraße 30',
-    'Adenauerring': 'Mensa Am Adenauerring',
-    'Erzbergerstraße': 'Mensa Erzbergerstraße',
-    'Holzgartenstraße': 'Mensa Holzgartenstraße',
-    'Moltkestraße': 'Mensa Moltke',
-    'Gottesaue': 'Mensa Schloss Gottesaue',
-    'Tiefenbronnerstraße': 'Mensa Tiefenbronnerstraße'
-}
-ICON_TAGS = {
-    'vegetarian_2.gif': 'veggi',
-    'vegan_2.gif': 'vegan',
-    's_2.gif': 'schwein',
-    'r_2.gif': 'rind',
-    'm_2.gif': 'fisch',
-    'bio_2.gif': 'bio',
-}
+# Init
+DATA = {}
+LOCK = asyncio.Lock()
+META_DATA = {'last_update': None}
 
 
 async def update(now):
-    async with aiohttp.ClientSession() as session:
+    """update the DATA variable with todays food"""
+    async with ClientSession() as session:
         async with session.get(MENSA_HTML_URL) as resp:
             if resp.status < 300:
                 strange_bytes = await resp.read()
@@ -105,6 +108,7 @@ async def update(now):
 
 
 async def check_for_updates(app):
+    """background task for regularly calling update"""
     await update(datetime.datetime.now())
     for next_dt in rrule.rrule(rrule.DAILY, byhour=1):
         await asyncio.sleep((next_dt-datetime.datetime.now()).seconds)
@@ -159,10 +163,12 @@ def parse_sw_site(html):
 
 
 async def handle_meta_request(request):
+    """entry point for /meta requests"""
     return web.json_response(META_DATA)
 
 
 def get_mensa(query):
+    """get data for a mensa as dict"""
     matches = [name for short, name in SHORTNAMES.items()
                if short.startswith(query)]
 
@@ -175,6 +181,7 @@ def get_mensa(query):
 
 
 def get_line(mquery, lquery):
+    """get data for a line in a mensa as dict"""
     mdata = get_mensa(mquery)
     matches = [line for line in mdata
                if line.endswith(lquery)] #TODO: generalize
@@ -188,16 +195,20 @@ def get_line(mquery, lquery):
 
 
 def format_mensa(data):
+    """get formatted tables for data of a mensa as dict"""
     names, food = zip(*data.items())
-    return '\n'.join(map('{}:\n{}'.format, names, map(format_line, food)))
+    formatter = lambda x, y: '{}:\n{}'.format(x, y) if y.strip() else ''
+    return '\n'.join(map(formatter, names, map(format_line, food)))
 
 
 def format_line(data):
+    """get formatted table for data of a line as dict"""
     return tabulate([format_meal(meal) for meal in data],
                     tablefmt='fancy_grid') + '\n'
 
 
 def format_meal(data):
+    """get list of formatted meal data items"""
     desc = data['name']+(' ({})'.format(data['note']) if data['note'] else '')
     return [desc, ','.join(map('\033[1m{}\033[0m'.format, data['tags'])),
             data['price']]
@@ -206,7 +217,7 @@ def format_meal(data):
 def get_resp_text(content, header=None):
     return RESP_TEMPL.format(content=content,
                              header=header if header else '',
-                             domain=HOST)
+                             domain=ROOT)
 
 async def req2resp(request, data_getter, args, formatter):
     await LOCK.acquire()
@@ -235,16 +246,19 @@ def data2resp(data, request, formatter):
 
 
 async def handle_mensa_request(request):
+    """entry point for /<mensa> requests"""
     args = [request.match_info['mensa']]
     return await req2resp(request, get_mensa, args, format_mensa)
 
 
 async def handle_line_request(request):
+    """entry point for /<mensa>/<line> requests"""
     args = [request.match_info['mensa'], request.match_info['linie']]
     return await req2resp(request, get_line, args, format_line)
 
 
 async def handle_default_request(request):
+    """entry point for / requests"""
     await LOCK.acquire()
     resp = data2resp(DATA['Mensa Am Adenauerring'], request, format_mensa)
     LOCK.release()
@@ -256,6 +270,7 @@ async def start_background_tasks(app):
 
 
 async def usage(request):
+    """entry point for /help requests"""
     if any(browser in request.headers['user-agent']
            for browser in ('Chrome', 'Safari', 'Mozilla')):
         return web.Response(text=HELP_HTML, content_type='text/html')
@@ -268,6 +283,8 @@ if __name__ == '__main__':
     argp.add_argument('-p', '--port', default=80)
     args = argp.parse_args()
     app = web.Application()
+    # app.on_startup.append(asyncio.coroutine(lambda a:
+        # a.setdefault('update', a.loop.create_task(check_for_updates(a)))))
     app.on_startup.append(start_background_tasks)
     app.add_routes([web.get('/help', usage),
                     web.get('/meta', handle_meta_request),
