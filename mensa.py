@@ -199,7 +199,8 @@ def format_line(data):
 
 def format_meal(data):
     desc = data['name']+(' ({})'.format(data['note']) if data['note'] else '')
-    return [desc, ','.join(data['tags']), data['price']]
+    return [desc, ','.join(map('\033[1m{}\033[0m'.format, data['tags'])),
+            data['price']]
 
 
 def get_resp_text(content, header=None):
