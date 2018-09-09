@@ -7,12 +7,14 @@ import bs4
 
 from dateutil import rrule
 from tabulate import tabulate
+from tinydb import TinyDB, Query
 from aiohttp import web, ClientSession
 
 
 # Configuration
 ROOT = 'frcl.de/mensa'
 MENSA_HTML_URL = 'http://www.sw-ka.de/de/essen/'
+STORAGEFILE = 'raw.json'
 SHORTNAMES = {
     # 'CafeteMoltke': 'Caféteria Moltkestraße 30',
     'Adenauerring': 'Mensa Am Adenauerring',
@@ -82,8 +84,16 @@ Found a bug? Open an issue at \033[33mhttps://github.com/frcl/mensa-ka\033[0m
 """
 # Init
 DATA = {}
-LOCK = asyncio.Lock()
+DATA_LOCK = asyncio.Lock()
+FILE_LOCK = asyncio.Lock()
 META_DATA = {'last_update': None}
+LOGGED_LINES = {
+    'Adenauerring': [
+        'Linie 1', 'Linie 2', 'Linie 3', 'Linie 4/5', 'Schnitzelbar',
+        'L6 Update', 'Spätausgabe und Abendessen', '[Kœri]werk',
+        'Cafeteria Heiße Theke', 'Cafeteria ab 14:30'
+    ]
+}
 
 
 async def update(now):
@@ -101,10 +111,55 @@ async def update(now):
 
     data = parse_sw_site(html)
 
-    await LOCK.acquire()
+    await DATA_LOCK.acquire()
     DATA.update(data)
     META_DATA['last_update'] = now.isoformat()
-    LOCK.release()
+    DATA_LOCK.release()
+    await FILE_LOCK.acquire()
+    write_to_file(data)
+    FILE_LOCK.release()
+
+
+def write_to_file(data):
+    with TinyDB(STORAGEFILE) as storage:
+        if not 'metadata' in storage.tables():
+            initalize_storage(storage)
+
+        meta = storage.table('metadata')
+        line_order = meta.get(Query().key == 'line_order')['value']
+        attr_order = meta.get(Query().key == 'attr_order')['value']
+
+        try:
+            hist = storage.table('history')
+
+            mensa = data[SHORTNAMES['Adenauerring']]
+            hist.insert({'date': datetime.date.today().isoformat(),
+                         'meals': [[[meal[attr] for attr in attr_order]
+                                    for meal in mensa[line]]
+                                   for line in line_order]})
+        except Exception as exc:
+            print(repr(exc))
+
+
+def initalize_storage(tdb):
+    """initalize the tinydb file with metadata and history
+
+    metadata format: key value pairs
+    each item is a dict of the form
+    {'key': ...,
+     'value': ...}
+
+    history format: dated meal lists
+    each item is a dict of the form
+    {'date': 'date in isoformat',
+     'meals': [[line1_att1, line1_attr2, ..,], [line2_att1, line2_attr2, ..,]]}
+    """
+    meta = tdb.table('metadata')
+    meta.insert({'key': 'line_order',
+                 'value': LOGGED_LINES['Adenauerring']})
+    meta.insert({'key': 'attr_order',
+                 'value': ['name', 'note', 'price', 'tags']})
+    tdb.table('history')
 
 
 async def check_for_updates(app):
@@ -219,11 +274,11 @@ def get_resp_text(content, header=None):
                              header=header if header else '',
                              domain=ROOT)
 
-async def req2resp(request, data_getter, args, formatter):
-    await LOCK.acquire()
+async def req2resp(request, data_getter, query, formatter):
+    await DATA_LOCK.acquire()
 
     try:
-        data = data_getter(*args)
+        data = data_getter(*query)
     except ValueError as exc:
         resp = web.Response(text=get_resp_text('\033[31mERROR: {}\033[0m\n---'
                                                .format(exc.args[0])),
@@ -231,7 +286,7 @@ async def req2resp(request, data_getter, args, formatter):
     else:
         resp = data2resp(data, request, formatter)
     finally:
-        LOCK.release()
+        DATA_LOCK.release()
 
     return resp
 
@@ -259,9 +314,9 @@ async def handle_line_request(request):
 
 async def handle_default_request(request):
     """entry point for / requests"""
-    await LOCK.acquire()
+    await DATA_LOCK.acquire()
     resp = data2resp(DATA['Mensa Am Adenauerring'], request, format_mensa)
-    LOCK.release()
+    DATA_LOCK.release()
     return resp
 
 
