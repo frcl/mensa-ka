@@ -8,6 +8,7 @@ aiohttp = "*"
 python-dateutil = "*"
 "beautifulsoup4" = "*"
 tabulate = "*"
+tinydb = "*"
 
 [dev-packages]
 
