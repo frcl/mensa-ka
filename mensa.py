@@ -1,10 +1,10 @@
 # pylint: disable=import-error
 import argparse
-import re
-import datetime
 import asyncio
-import bs4
+import datetime
+import re
 
+import bs4
 from dateutil import rrule
 from tabulate import tabulate
 from tinydb import TinyDB, Query
@@ -61,20 +61,20 @@ HELP_HTML = """<pre>
     <h1># Usage</h1>
     Mensa am Adenauerring (default):
     <code>
-    $ curl {host}
+        $ curl {host}
     </code>
     Mensa Schloss Gottesaue:
     <code>
-    $ curl {host}/Gottesaue
-    $ curl {host}/G
+        $ curl {host}/Gottesaue
+        $ curl {host}/G
     </code>
     Linie 3 am Adenauerring:
     <code>
-    $ curl {host}/A/3
+        $ curl {host}/A/3
     </code>
     JSON output:
     <code>
-    $ curl {host}?format=json
+        $ curl {host}?format=json
     </code>
 </pre>""".format(host=ROOT)
 RESP_TEMPL = """{header}
@@ -204,8 +204,8 @@ def parse_sw_site(html):
                 for mtr in ltr.findAll('tr', {'class': re.compile(r'mt-\d')}):
                     td = mtr.find('td', {'class': 'first'})
                     note = td.find('span', {'class': None})
-                    tagnames = [ICON_TAGS.get(img['src'].split('/')[-1]) for img in
-                                mtr.findAll('img', {'class': 'mealicon_2'})]
+                    tagnames = [ICON_TAGS.get(img['src'].split('/')[-1]) for img
+                                in mtr.findAll('img', {'class': 'mealicon_2'})]
                     meals.append({
                         'name': mtr.find('b').text,
                         'note': note.text if note else '',
@@ -253,7 +253,8 @@ def format_mensa(data):
     """get formatted tables for data of a mensa as dict"""
     names, food = zip(*data.items())
     formatter = lambda x, y: '{}:\n{}'.format(x, y) if y.strip() else ''
-    return '\n'.join(map(formatter, names, map(format_line, food)))
+    return '\n'.join(
+        filter(lambda x: x, map(formatter, names, map(format_line, food))))
 
 
 def format_line(data):
@@ -302,14 +303,14 @@ def data2resp(data, request, formatter):
 
 async def handle_mensa_request(request):
     """entry point for /<mensa> requests"""
-    args = [request.match_info['mensa']]
-    return await req2resp(request, get_mensa, args, format_mensa)
+    query = [request.match_info['mensa']]
+    return await req2resp(request, get_mensa, query, format_mensa)
 
 
 async def handle_line_request(request):
     """entry point for /<mensa>/<line> requests"""
-    args = [request.match_info['mensa'], request.match_info['linie']]
-    return await req2resp(request, get_line, args, format_line)
+    query = [request.match_info['mensa'], request.match_info['linie']]
+    return await req2resp(request, get_line, query, format_line)
 
 
 async def handle_default_request(request):
@@ -326,14 +327,13 @@ async def start_background_tasks(app):
 
 async def usage(request):
     """entry point for /help requests"""
-    if any(browser in request.headers['user-agent']
-           for browser in ('Chrome', 'Safari', 'Mozilla')):
-        return web.Response(text=HELP_HTML, content_type='text/html')
-    else:
-        return web.Response(text=HELP_TEXT, content_type='text/plain')
+    return web.Response(*(dict(text=HELP_HTML, content_type='text/html')
+                          if any(browser in request.headers['user-agent']
+                                 for browser in ('Chrome', 'Safari', 'Mozilla'))
+                          else dict(text=HELP_TEXT, content_type='text/plain')))
 
 
-if __name__ == '__main__':
+def main():
     argp = argparse.ArgumentParser()
     argp.add_argument('-p', '--port', default=80)
     args = argp.parse_args()
@@ -347,3 +347,7 @@ if __name__ == '__main__':
                     web.get('/{mensa}', handle_mensa_request),
                     web.get('/{mensa}/{linie}', handle_line_request)])
     web.run_app(app, port=args.port)
+
+
+if __name__ == '__main__':
+    main()
