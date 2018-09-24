@@ -165,7 +165,7 @@ def initalize_storage(tdb):
 async def check_for_updates(app):
     """background task for regularly calling update"""
     await update(datetime.datetime.now())
-    for next_dt in rrule.rrule(rrule.DAILY, byhour=1):
+    for next_dt in rrule.rrule(rrule.DAILY, byhour=(1, 7, 10)):
         await asyncio.sleep((next_dt-datetime.datetime.now()).seconds)
         await update(next_dt)
 
