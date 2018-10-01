@@ -3,12 +3,17 @@ import argparse
 import asyncio
 import datetime
 import re
+import sys
 
 import bs4
 from dateutil import rrule
 from tabulate import tabulate
 from tinydb import TinyDB, Query
+import aiohttp
 from aiohttp import web, ClientSession
+
+
+__version__ = 'v1.0.0'
 
 
 # Configuration
@@ -81,6 +86,10 @@ RESP_TEMPL = """{header}
 {content}
 For usage info see \033[33mhttp://{domain}/help\033[0m
 Found a bug? Open an issue at \033[33mhttps://github.com/frcl/mensa-ka\033[0m
+"""
+META_TEMPL = """\033[1m\033[33mmen.sa {version}\033[0m
+Running on Python {py_version} with aiohttp {aio_version}.
+The last update was at {last_update}.
 """
 # Init
 DATA = {}
@@ -219,7 +228,15 @@ def parse_sw_site(html):
 
 async def handle_meta_request(request):
     """entry point for /meta requests"""
-    return web.json_response(META_DATA)
+    if 'format' in request.query and 'json' in request.query['format']:
+        resp = web.json_response(META_DATA)
+    else:
+        info = META_TEMPL.format(version=__version__,
+                                 py_version=sys.version[:5],
+                                 aio_version=aiohttp.__version__,
+                                 last_update=META_DATA['last_update'])
+        resp = web.Response(text=info, content_type='text/plain')
+    return resp
 
 
 def get_mensa(query):
