@@ -99,7 +99,7 @@ META_DATA = {'last_update': None}
 LOGGED_LINES = {
     'Adenauerring': [
         'Linie 1', 'Linie 2', 'Linie 3', 'Linie 4/5', 'Schnitzelbar',
-        'L6 Update', 'Spätausgabe und Abendessen', '[Kœri]werk',
+        'L6 Update', 'Spätausgabe und Abendessen', '[kœri]werk',
         'Cafeteria Heiße Theke', 'Cafeteria ab 14:30'
     ]
 }
