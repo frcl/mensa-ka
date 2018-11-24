@@ -344,10 +344,10 @@ async def start_background_tasks(app):
 
 async def usage(request):
     """entry point for /help requests"""
-    return web.Response(*(dict(text=HELP_HTML, content_type='text/html')
-                          if any(browser in request.headers['user-agent']
-                                 for browser in ('Chrome', 'Safari', 'Mozilla'))
-                          else dict(text=HELP_TEXT, content_type='text/plain')))
+    return web.Response(**(dict(text=HELP_HTML, content_type='text/html')
+                           if any(browser in request.headers['user-agent']
+                                  for browser in ('Chrome', 'Safari', 'Mozilla'))
+                           else dict(text=HELP_TEXT, content_type='text/plain')))
 
 
 def main():
