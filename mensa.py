@@ -29,6 +29,12 @@ SHORTNAMES = {
     'Gottesaue': 'Mensa Schloss Gottesaue',
     'Tiefenbronnerstraße': 'Mensa Tiefenbronnerstraße'
 }
+DEFAUL_LINES = [
+    'Linie 1',
+    'Linie 2',
+    'Linie 3',
+    'Linie 4/5',
+]
 ICON_TAGS = {
     'vegetarian_2.gif': 'veggi',
     'vegan_2.gif': 'vegan',
@@ -333,7 +339,8 @@ async def handle_line_request(request):
 async def handle_default_request(request):
     """entry point for / requests"""
     await DATA_LOCK.acquire()
-    resp = data2resp(DATA['Mensa Am Adenauerring'], request, format_mensa)
+    data = {line: DATA['Mensa Am Adenauerring'][line] for line in DEFAUL_LINES}
+    resp = data2resp(data, request, format_mensa)
     DATA_LOCK.release()
     return resp
 
