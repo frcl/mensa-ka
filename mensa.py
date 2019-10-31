@@ -14,7 +14,7 @@ import aiohttp
 from aiohttp import web, ClientSession
 
 
-__version__ = 'v1.1.0'
+__version__ = 'v1.1.1'
 
 
 # Configuration
