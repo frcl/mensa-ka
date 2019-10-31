@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import datetime
+import logging
 import re
 import sys
 
@@ -179,11 +180,20 @@ def initalize_storage(tdb):
 
 async def check_for_updates(app):
     """background task for regularly calling update"""
-    await update(datetime.datetime.utcnow())
-    for next_dt in rrule.rrule(rrule.DAILY, byhour=(0, 7, 9),
-                               byminute=0, bysecond=1):
+    for _ in range(3):
+        try:
+            await update(datetime.datetime.utcnow())
+        except Exception as exc:
+            logging.error('Failed to initalize: {}'.format(repr(exc)))
+            await asyncio.sleep(60)
+
+    for next_dt in rrule.rrule(rrule.DAILY, byhour=(0, 7, 9, 11),
+                               byminute=0, bysecond=42):
         await asyncio.sleep((next_dt-datetime.datetime.utcnow()).seconds)
-        await update(next_dt)
+        try:
+            await update(next_dt)
+        except Exception as exc:
+            logging.error('Failed to update: {}'.format(repr(exc)))
 
 
 def parse_sw_site(html):
@@ -375,4 +385,5 @@ def main():
 
 
 if __name__ == '__main__':
+    logging.basicConfig(stream=sys.stdout)
     main()
